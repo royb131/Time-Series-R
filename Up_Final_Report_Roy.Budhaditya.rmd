@@ -1,0 +1,200 @@
+---
+title: "Final Report"
+author: "Roy Budhaditya"
+date: "April 28, 2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+##Data Description
+Globtemp dataset consists of lobal mean land-ocean temperature deviations measured in degrees centigrade, <br>with base period between 1880-2015 in degrees centigrade.Globtemp
+data is  a time series from 1880-2015. This dataset is used to demonstrate empirical time series analysis.<br>
+apparent upward trend in the series during the latter part of the twentieth century that has been used as an argument for the global warming hypothesis.
+
+##Variable description and its statistical summary
+Data are in mean deviation of land ocean temperature
+```{r}
+# Libraries
+library(astsa)
+library(astsa)
+library(timeSeries)
+library(tseries)
+library(forecast)
+library(xts)
+library(TTR)
+# Get dataset from astsa
+data("globtemp")
+class(globtemp)
+# Statistics of globaltemp dataset
+mean(globtemp)
+mean(globtemp)
+median(globtemp)
+sd(globtemp)
+IQR(globtemp)
+mad(globtemp)
+summary(globtemp)
+```
+Mean absolute deviation is slightly less than the standard deviation (SD). This is one reason not to use the MAD for normal distributions.
+
+##Time series (ts) description 
+Time series is sequence of data in chronological order. There are basic four types of time series modesl,White Noise, Random walk, Autoregression, Simple Moving average.
+Building time series object with globtemp dataset.Here we are using start= 1880, end = 2015 and yearly frequency to build a time series object whcih will be useful for future analysis.
+
+```{r}
+gtemp=ts(globtemp,frequency=1,start=1880,end=2015)
+head(gtemp,n=10)
+```
+
+##Data Exploration
+#Plotting data 
+```{r}
+plot(globtemp,main="Yearly average global temperature deviations  between 1880 to 2015 in degrees centigrade",type="o", ylab="Global Temperature Deviations")
+grid(lty=1, col=gray(.9)) 
+```
+#boxplot
+```{r}
+boxplot(gtemp)
+```
+#ts plot with abline
+```{r}
+ts.plot(gtemp)
+tt <- 1:length(globtemp)
+fit <- ts(loess(globtemp ~ tt, span = 0.2)$fitted, start = 1880, frequency = 1)
+plot(globtemp, type='l')
+lines(fit, col = 'red')
+grid()
+
+plot(gtemp) 
+abline(reg=lm(gtemp~time(gtemp)))
+
+##Density plot
+plot(density(gtemp), main = "globtemp density plot")
+```
+#Data description
+
+After plotting the data it appreas to look like a random walk compared to a trend stationary series. In a random walm, current observation is equal to the previous observation with a random step up or down.
+
+```{r}
+# Differencing Time series data
+par(mfrow=c(2,1))
+plot(diff(globtemp), type="o")
+mean(diff(globtemp)) # drift estimate = .008
+acf(diff(gtemp), 48)
+```
+## Differenced process shows minimal autocorelation which proved again that the trend is random walk with drift. In traditional time series analysis in a random walk with drift the estimated drift is always about .008 with 1 degree increase in about hundred years. As we can see in above plots, random walk trend is not stationary, but differenced data are stationary. The mean is in constant and there is clearly an upward trend. The variance looks to be very stable.
+
+Further chec of stationary and non- stationary.If stationary then the ACF or PACF plots will produce a  downward trend in correlation after a quick small amount of lag among the  points.
+
+```{r}
+acf2(gtemp)
+```
+It looks from the graph that this  is non stationary as a large number of previous observation is correlated with future observations.
+
+```{r}
+#Plot differenceting with acf2.
+
+acf2(diff(gtemp))
+
+```
+
+
+## Transformation
+
+We used diff() function here to remove linear trenads. We could have used diff function with seasonal differences to remove periodic trends. 
+
+KPSS Test for Level Stationarity:-
+```{r}
+require(tseries)
+globtem_diff<-diff(gtemp,d=1)
+kpss.test(gtemp)
+```
+ As shows in result of kpsss test. P- value is 0.01. As per kpss test small p-values suggest that the series is not stationary and a differencing is required.
+Also, pvalue =0.10 we fail to reject the null hypothesis of stationarity. so, series diff=1 becomes stationary.
+
+##Data Decomposition
+
+Decompose ts into trends, seasons, residuals:-
+
+globtemp dataset has no seasonal cycles or less than 2 seasonal cycles. Decomposing of non seasonal time series involves tying to separate the time series into these individual components. Here we can use state space model for smoothing the data. 
+
+```{r}
+smoothinggtemp<- SMA(gtemp, n=3)
+plot.ts(smoothinggtemp)
+#It seems like there is still some random fluctuations in the data, we might want to try a big larger of a smoother.
+smoothinggtemp<- SMA(gtemp, n=10)
+plot.ts(smoothinggtemp)
+
+# Now we can see a positive trend of temperature by using smoothing techniques which iss in upword slopping, 
+
+```
+### Regression
+
+The forecast-package makes it easy to combine the time-dependent variation of (the residuals of) a timeseries and regression modeling using the arima or auto.
+
+```{r}
+auto.arima(gtemp, d = 1, max.p = 5, max.q = 5)
+```
+Using ARIMA fit to check residuals.
+```{r}
+arima.fit2<-Arima(gtemp, order=c(1,1,3), include.drift =TRUE, method="ML")
+arima.fit2
+
+# Check for confidence interbvals of auto arima.
+confint(arima.fit2)
+tsdisplay(residuals(arima.fit2), lag.max=25, main=' Model Residuals')
+# creating a linear regression model.
+globtemp.reg<-lm(gtemp~time(gtemp))
+summary(globtemp.reg)
+```
+Regression output produces above shows us several summary values from the model. Call is the model parameters used in building the lm model. Here multiple R square and R adjusted R squared are close togther and close to 1. From the modell it looks like variance of the residuals is constant. 
+
+## ARMA/ARIMA model 
+
+```{r}
+#Plot And Print ACF And PACF Of A Time Series: Max lag: sqrt n + 10
+plot(acf(gtemp))
+
+# plot ACF with diff()
+plot(acf(diff(gtemp)))
+# plot partial autocorrelation pacf
+plot(pacf(gtemp))
+# plot pacf with diff.
+plot(pacf(diff(gtemp)))
+
+```
+
+Plots description in terms of lags (tails and cut offs):- 
+
+Noises are wide in ACF since most of the distrobutions are not in blue line created by ACF plot. This clearly demonstrates it is not a white noise and there is information in the data which can be utilized to forecast future values. Here PACF is lamost 1 at lag 1 . 
+R produces 95% significance boundaries as blue dotted lines in ACF and PACF graphs. There are significant autocorrelations incluidng many lags in our data, as produced by the ACF plot above though, this could be beacuse of carrying over correlation from the beginning  or early lags, since the PACF plot  shows a spike at lags 1 and 2.
+
+## Model Diagnostics
+
+- build ARIMA model with various p, d, q.
+
+```{r}
+arima.fit2<-arima(gtemp, order=c(1,1,3))
+arima.fit2
+arima.fit3<- arima(gtemp,order=c(1,1,1))
+arima.fit3
+tsdisplay(arima(gtemp,order=c(1,1,3))$residuals)
+tsdisplay(arima(gtemp,order=c(1,1,1))$residuals)
+```
+By comparing these two above moodels, it looks like model with p=1,q=1 and d=3 are the best fit for this dataset. There are noticable differences between ACF and PACF trends among these two models. The time plot of the residuals looks much better with (1,1,3) and seems like noise and the mean accross time
+seems to be well centered around 0. 
+
+Residual diagnosis:- 
+```{r}
+tsdisplay(arima(gtemp,order=c(1,1,3))$residuals)
+```
+From the above graph we can conclude that, residuals are placed around a mean near 0. There is no obvious trends and patterns noticed along with no autocoorelation of the residuals. 
+
+```{r}
+residuals<- auto.arima(gtemp)
+checkresiduals(residuals)
+```
+
+
+
+
